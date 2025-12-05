@@ -1,0 +1,74 @@
+`timescale 1ns / 1ps
+module UART_tb();
+
+    reg clk;
+    reg reset;
+    reg [7:0] data_tx;
+    reg sent;
+
+    wire [8:0] data_rx;
+    wire recevied;
+
+    
+    UART uart(
+        .clk(clk),
+        .reset(reset),
+        .data_tx(data_tx),
+        .sent(sent),
+        .recevied(recevied),
+        .data_rx(data_rx)
+    );
+
+    
+    always #100 clk = ~clk;
+
+    initial begin
+        clk = 0;
+        reset = 1;
+        sent = 0;
+        data_tx = 8'h01;
+
+        #1000
+        sent = 1;
+        reset = 0;
+        
+        #4400
+
+       
+        data_tx = 8'hAA;
+        sent = 1;
+       
+
+        #4400
+        
+        data_tx = 8'h17;
+        
+        #4400
+        
+        data_tx = 8'h19;
+        
+        #4400
+        
+        data_tx = 8'hff;
+        
+       
+       #4400
+        
+         data_tx = 8'hfe;
+         #4400
+         reset = 1;
+       // #100
+       // sent = 1;
+        #4400
+        reset = 0;
+        
+         sent = 0;
+        
+        #10000
+        sent = 1;
+           
+
+        #44000 $finish;
+    end
+
+endmodule
