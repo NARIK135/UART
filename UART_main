@@ -1,0 +1,338 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+
+
+module UART(
+input clk,
+input reset,
+
+input [7:0]data_tx,
+
+input sent,
+output recevied,
+output [8:0]data_rx
+
+    );
+    
+   // localparam clk_bit = 2;
+    
+     //parameter baud_rate = 2500000;
+    // parameter clk_freq = 5000000;
+
+    // parameter clk_bit = clk_freq/baud_rate;
+    
+    wire serial_data;
+    wire done;
+   
+    
+    
+    UART_tx uart_tx(clk,reset,sent,data_tx,serial_data,done);
+    
+    UART_rx uart_rx(clk,reset,serial_data,data_rx,recevied);
+    
+      
+endmodule
+
+module UART_tx(
+
+input clk,
+input reset,
+
+input  send,
+input  [7:0]data_tx,
+
+output reg serial_data,
+output reg done
+
+
+
+);
+
+
+ 
+
+// let baud rate 100 and sys clk hz 200 then it takes abt 2 clk cycles for 1 bit
+parameter baud_rate = 2500000;
+parameter clk_freq = 5000000;
+
+parameter clk_bit = clk_freq/baud_rate;
+
+parameter IDLE = 2'b00;
+parameter START = 2'b01;
+parameter DATA = 2'b10;
+parameter STOP = 2'b11;
+
+
+
+reg [1:0] state;
+reg [3:0] counter_clk;
+reg [3:0] index;
+reg [8:0] tx_data;
+reg parity_bit;
+
+//assign parity_bit = data_tx[0]+data_tx[1]+data_tx[2]+data_tx[3]+data_tx[4]+data_tx[5]+data_tx[6]+data_tx[7];
+
+
+always@(posedge clk or posedge reset) begin
+
+
+   if(reset) begin
+   counter_clk <= 4'd0;
+   index <= 4'd0;
+   state <= IDLE;
+   tx_data <= 9'd0;
+   serial_data <= 1'b1;
+   done <= 1'b0;
+   
+   
+
+   end
+    
+     
+   else begin
+   done <= 1'b0;
+   parity_bit = data_tx[0]+data_tx[1]+data_tx[2]+data_tx[3]+data_tx[4]+data_tx[5]+data_tx[6]+data_tx[7];
+   
+   case(state)
+   
+   IDLE: begin
+   
+   serial_data <= 1'b1;
+   index <= 4'b0;
+   
+   if(send) begin
+   state <= START;
+   counter_clk <= 4'b0;
+   tx_data[7:0] <= data_tx;
+   tx_data[8] <= parity_bit;
+   
+      end
+   end
+   
+   START: begin
+   serial_data <= 1'b0;
+   index = 3'b0;
+   
+   if(counter_clk == clk_bit - 1) begin
+   state <= DATA;
+   counter_clk <= 0;
+   
+   end
+   else begin
+   counter_clk <= counter_clk + 1;
+   end
+   
+   end
+   
+   DATA: begin
+   
+   serial_data <= tx_data[index];
+   
+   if(counter_clk == clk_bit - 1) begin
+   
+    counter_clk = 0;
+   
+      if(index == 8) begin
+      state <= STOP;
+      end
+      else begin
+      index <= index+1;
+      end
+   
+
+   end
+   
+   else begin
+    counter_clk <= counter_clk +1;
+   
+   end
+   
+
+   end
+   
+   STOP: begin
+   serial_data <= 1;
+   index <= 0;
+   if(counter_clk == clk_bit-1) begin
+   
+   state <= IDLE;
+   end
+   
+   else begin
+   counter_clk <= counter_clk +1;
+   end
+   
+   end
+   
+
+   endcase
+
+  end
+
+
+end
+
+
+
+endmodule
+
+
+module UART_rx(
+input clk_rx,
+input reset,
+input serial_data,
+
+output reg [8:0]data_rx,
+output reg recevied
+);
+
+
+
+parameter baud_rate = 2500000;
+parameter clk_freq = 5000000;
+
+parameter clk_bit = clk_freq/baud_rate;
+
+parameter idle = 3'b000;
+parameter start = 3'b001;
+parameter data = 3'b010;
+parameter stop = 3'b100;
+
+reg [2:0]state;
+reg [3:0]counter_clk;
+reg [3:0]index;
+reg [8:0]rx_data;
+
+
+always@(posedge clk_rx or posedge reset) begin
+
+
+  
+if(reset) begin
+
+counter_clk <= 4'b0;
+   index <= 4'b0;
+   state <= idle;
+   rx_data <= 8'b0;
+   recevied <= 1'b0;
+   data_rx <= rx_data;
+   
+
+
+end
+
+else begin
+
+
+
+ case(state)
+   
+   
+    idle: begin
+    
+      if(serial_data == 1'b0) begin
+      
+        state <= start;
+        counter_clk <= 4'b0;
+      
+      end
+      end
+      
+    start: begin
+    
+    
+       if(counter_clk == (clk_bit/2)-1) begin
+       
+         if(serial_data == 1'b0) begin
+          
+             state <= data;
+               counter_clk <= 0;
+                 index<= 0;
+           end
+           
+           
+           else begin
+             state <= idle;
+           end
+           
+       end
+      
+          
+          else begin
+             counter_clk <= counter_clk+1;        
+          end
+       
+       end
+         
+      data: begin
+      
+      if(counter_clk == clk_bit-1)begin
+       
+        counter_clk <= 0;
+        rx_data[index] <= serial_data;
+      
+      
+        if (index == 8) begin
+         state <= stop; 
+        end
+        else begin
+         index <= index+1;
+        end
+     
+     end
+     
+     else begin
+     counter_clk <= counter_clk+1;
+     end
+
+
+      end
+      
+      stop : begin
+      
+      if(counter_clk == clk_bit - 1) begin
+      state <= idle;
+      counter_clk <= 0;
+      recevied <= 1;
+      data_rx <= rx_data;
+      
+      
+      end
+      else begin
+        
+         counter_clk <= counter_clk + 1;
+             
+      end
+      
+      end
+      
+      default: state <= idle;
+
+
+ endcase
+
+end
+
+end
+
+
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
